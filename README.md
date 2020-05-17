@@ -5,6 +5,8 @@ distributes transcode jobs by creating pods in a Kubernetes cluster to perform
 transcodes, instead of running transcodes on the Plex Media Server instance
 itself.
 
+[For tips on how to set it up on a Raspberry Pi, jump to this section](#additional-raspberry-pi-requirements)
+
 ## How it works
 
 kube-plex works by replacing the Plex Transcoder program on the main PMS
@@ -67,3 +69,132 @@ NAME                              READY     STATUS    RESTARTS   AGE
 plex-kube-plex-75b96cdcb4-skrxr   1/1       Running   0          14m
 pms-elastic-transcoder-7wnqk      1/1       Running   0          8m
 ```
+
+## More Setup for Raspberry Pi
+
+If you want to expand on this deployment with helm like this:
+
+```bash
+helm install plex kube-plex/charts/kube-plex/ \
+  --values media.plex.values.yml \
+  --namespace plex
+```
+
+Your `media.plex.values.yml` file can look like the following:
+
+```yaml
+# media.plex.values.yml
+
+claimToken: "<CLAIM_TOKEN>" # Replace `<CLAIM_TOKEN>` by the token obtained previously. https://www.plex.tv/claim/
+
+image:
+  repository: linuxserver/plex
+  tag: arm32v7-latest
+  pullPolicy: IfNotPresent
+
+kubePlex:
+  enabled: false # kubePlex (transcoder job) is disabled because not available on ARM. The transcoding will be performed by the main Plex instance instead of a separate Job.
+
+timezone: America/New_York # Replace with your own timezone based on the TZ Database Name value: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+
+service:
+  type: LoadBalancer # We will use a LoadBalancer to obtain a virtual IP that can be exposed to Plex Media via our router
+  port: 32400 # Port to expose Plex
+
+rbac:
+  create: true
+
+nodeSelector:
+  beta.kubernetes.io/arch: arm # This is here so it can work on the Raspberry Pi Kubernetes Cluster
+
+persistence:
+  transcode:
+    volumeName: "<VOLUME_NAME_HERE>"
+    claimName: "<VOLUME_CLAIM_NAME_HERE>"
+    subPath: "plex/transcode"
+    storageClass: "manual"
+  data:
+    volumeName: "<VOLUME_NAME_HERE>"
+    claimName: "<VOLUME_CLAIM_NAME_HERE>"
+    subPath: "plex/data"
+    storageClass: "manual"
+  config:
+    volumeName: "<VOLUME_NAME_HERE>"
+    claimName: "<VOLUME_CLAIM_NAME_HERE>"
+    subPath: "plex/config"
+    storageClass: "manual"
+
+proxy:
+  enable: false
+```
+
+### Additional Raspberry Pi requirements
+
+The following MUST be set in a configuration setting of your choice. This is to ensure that your Plex application is not looping on `CreatingContainer` endlessly since your Kubernetes Master Node is unable to match against the default value of `nodeSelector: beta.kubernetes.io/arch: amd64`.
+
+```yaml
+nodeSelector:
+    beta.kubernetes.io/arch: arm # Set to arm so it works on a Raspberry Pi
+```
+
+### volumeName addition
+
+This fork is different from the parent where the following options are passed down to the `deployment.yaml` file:
+
+```yaml
+persistence:
+    transcode:
+        volumeName: "<VOLUME_MOUNT_NAME_HERE>"
+
+    data:
+        volumeName: "<VOLUME_MOUNT_NAME_HERE>"
+
+    config:
+        volumeName: "<VOLUME_MOUNT_NAME_HERE>"
+```
+
+Before the Volume Mounts would be defined by default to their respective parent designations of `transcode`, `data`, and `config`. But I didn't want to have separate PVC/PV's set-up for each Plex element.
+
+If the `volumeName` is defined here along with the `claimName` for all three of the persistence layers and they are all the same - you could use the same PV without having to create separate PVC/PV's ahead of time.
+
+I was able to create a Persistent Volume:
+```yaml
+# media.persistentvolume.yml
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: "media-ssd"
+  labels:
+    type: "local"
+spec:
+  storageClassName: "manual"
+  capacity:
+    storage: "250Gi"
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: "/mnt/ssd/media"
+---
+```
+
+and a Persistent Volume Claim:
+```yaml
+# media.persistentvolumeclaim.yml
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: "media"
+  name: "media-ssd"
+spec:
+  storageClassName: "manual"
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: "250Gi"
+---
+```
+
+and use the value `media-ssd` as the `volumeName` and it was able to populate within the PV as expected under `/mnt/ssd/media/<plex-directory-here>`.

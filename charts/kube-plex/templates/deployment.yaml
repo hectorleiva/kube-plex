@@ -36,7 +36,7 @@ spec:
     spec:
       serviceAccountName: {{ if .Values.rbac.create }}{{ template "fullname" . }}{{ else }}{{ .Values.rbac.serviceAccountName | quote }}{{ end }}
       hostname: "{{ template "fullname" . }}"
-{{- if .Values.kubePlex.enabled }}
+      {{- if .Values.kubePlex.enabled }}
       initContainers:
       - name: kube-plex-install
         image: "{{ .Values.kubePlex.image.repository }}:{{ .Values.kubePlex.image.tag }}"
@@ -48,12 +48,12 @@ spec:
         volumeMounts:
         - name: shared
           mountPath: /shared
-{{- end }}
+      {{- end }}
       containers:
       - name: plex
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
-{{- if .Values.kubePlex.enabled }}
+        {{- if .Values.kubePlex.enabled }}
         # We replace the PMS binary with a postStart hook to save having to
         # modify the default image entrypoint.
         lifecycle:
@@ -67,7 +67,7 @@ spec:
                 set -e
                 rm -f '/usr/lib/plexmediaserver/Plex Transcoder'
                 cp /shared/kube-plex '/usr/lib/plexmediaserver/Plex Transcoder'
-{{- end }}
+        {{- end }}
         readinessProbe:
           httpGet:
             path: /identity
@@ -103,53 +103,65 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: TRANSCODE_PVC
-{{- if .Values.persistence.transcode.claimName }}
+				  {{- if .Values.persistence.transcode.claimName }}
           value: "{{ .Values.persistence.transcode.claimName }}"
-{{- else }}
+				  {{- else }}
           value: "{{ template "fullname" . }}-transcode"
-{{- end }}
+				  {{- end }}
         - name: DATA_PVC
-{{- if .Values.persistence.data.claimName }}
+				  {{- if .Values.persistence.data.claimName }}
           value: "{{ .Values.persistence.data.claimName }}"
-{{- else }}
+				  {{- else }}
           value: "{{ template "fullname" . }}-data"
-{{- end }}
+				  {{- end }}
         - name: CONFIG_PVC
-{{- if .Values.persistence.config.claimName }}
+				  {{- if .Values.persistence.config.claimName }}
           value: "{{ .Values.persistence.config.claimName }}"
-{{- else }}
+				  {{- else }}
           value: "{{ template "fullname" . }}-config"
-{{- end }}
-{{- if .Values.proxy.enable }}
-  {{- if .Values.proxy.http }}
+				  {{- end }}
+      {{- if .Values.proxy.enable }}
+				{{- if .Values.proxy.http }}
         - name: "HTTP_PROXY"
           value: "{{.Values.proxy.http}}"
-  {{- end }}
-  {{- if .Values.proxy.https }}
+	      {{- end }}
+        {{- if .Values.proxy.https }}
         - name: "HTTPS_PROXY"
           value: "{{.Values.proxy.https}}"
-  {{- end }}
-  {{- if .Values.proxy.noproxy }}
+        {{- end }}
+        {{- if .Values.proxy.noproxy }}
         - name: "NO_PROXY"
           value: "{{.Values.proxy.noproxy}}"
-  {{- end }}
-{{- end }}
+        {{- end }}
+      {{- end }}
         volumeMounts:
+			  {{- if .Values.persistence.data.volumeName }}
+				- name: {{ .Values.persistence.data.volumeName }}
+			  {{- else }}
         - name: data
+			  {{- end }}
           mountPath: /data
-        {{- if .Values.persistence.data.subPath }}
+          {{- if .Values.persistence.data.subPath }}
           subPath: {{ .Values.persistence.data.subPath }}
-        {{ end }}
-        - name: config
+          {{ end }}
+			  {{- if .Values.persistence.config.volumeName }}
+				- name: {{ .Values.persistence.config.volumeName }}
+			  {{- else }}
+				- name: config
+			  {{- end }}
           mountPath: /config
-        {{- if .Values.persistence.config.subPath }}
+          {{- if .Values.persistence.config.subPath }}
           subPath: {{ .Values.persistence.config.subPath }}
-        {{ end }}
-        - name: transcode
+          {{ end }}
+			  {{- if .Values.persistence.transcode.volumeName }}
+				- name: {{ .Values.persistence.transcode.volumeName }}
+			  {{- else }}
+				- name: transcode
+			  {{- end }}
           mountPath: /transcode
-        {{- if .Values.persistence.transcode.subPath }}
+          {{- if .Values.persistence.transcode.subPath }}
           subPath: {{ .Values.persistence.transcode.subPath }}
-        {{ end }}
+          {{ end }}
         {{-  range .Values.persistence.extraData }}
         - mountPath: "/data-{{ .name }}"
           name: "extradata-{{ .name }}"
@@ -163,7 +175,7 @@ spec:
 {{ toYaml .Values.nodeSelector | indent 8 }}
     {{- end }}
       volumes:
-      - name: data
+      - name: media-ssd
         persistentVolumeClaim:
 {{- if .Values.persistence.data.claimName }}
           claimName: "{{ .Values.persistence.data.claimName }}"
