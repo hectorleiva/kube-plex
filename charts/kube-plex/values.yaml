@@ -64,6 +64,11 @@ nodeSelector:
   beta.kubernetes.io/arch: amd64
 
 persistence:
+  soloVolume:
+    # Used if transcode/data/config should all be mounted onto a single Volume and VolumeMount
+    enabled: false
+    volumeName: ""
+    claimName: ""
   transcode:
     # Optionally specify claimName to manually override the PVC to be used for
     # the transcode directory. If claimName is specified, storageClass and size

@@ -108,19 +108,17 @@ nodeSelector:
   beta.kubernetes.io/arch: arm # This is here so it can work on the Raspberry Pi Kubernetes Cluster
 
 persistence:
-  transcode:
+  soloVolume: # Use this object only if you want to mount everything onto a single volume/volumeClaim
+    enabled: true
     volumeName: "<VOLUME_NAME_HERE>"
     claimName: "<VOLUME_CLAIM_NAME_HERE>"
+  transcode:
     subPath: "plex/transcode"
     storageClass: "manual"
   data:
-    volumeName: "<VOLUME_NAME_HERE>"
-    claimName: "<VOLUME_CLAIM_NAME_HERE>"
     subPath: "plex/data"
     storageClass: "manual"
   config:
-    volumeName: "<VOLUME_NAME_HERE>"
-    claimName: "<VOLUME_CLAIM_NAME_HERE>"
     subPath: "plex/config"
     storageClass: "manual"
 
@@ -143,19 +141,19 @@ This fork is different from the parent where the following options are passed do
 
 ```yaml
 persistence:
-    transcode:
-        volumeName: "<VOLUME_MOUNT_NAME_HERE>"
-
-    data:
-        volumeName: "<VOLUME_MOUNT_NAME_HERE>"
-
-    config:
-        volumeName: "<VOLUME_MOUNT_NAME_HERE>"
+  soloVolume:
+    enabled: true
+    volumeName: "<VOLUME_MOUNT_NAME_HERE>"
+    claimName: "<VOLUME_MOUNT_NAME_HERE>"
 ```
 
 Before the Volume Mounts would be defined by default to their respective parent designations of `transcode`, `data`, and `config`. But I didn't want to have separate PVC/PV's set-up for each Plex element.
 
-If the `volumeName` is defined here along with the `claimName` for all three of the persistence layers and they are all the same - you could use the same PV without having to create separate PVC/PV's ahead of time.
+If:
+  - `soloVolume.enabled` is set to `true`
+  - `soloVolume.volumeName` and `soloVolume.claimName` are defined
+
+All 3 (`transcode`/`data`/`config`) should now be sharing the same `volumeName` and `claimName`.
 
 I was able to create a Persistent Volume:
 ```yaml
@@ -197,4 +195,12 @@ spec:
 ---
 ```
 
-and use the value `media-ssd` as the `volumeName` and it was able to populate within the PV as expected under `/mnt/ssd/media/<plex-directory-here>`.
+and use 
+```yaml
+persistent:
+  soloVolume:
+    volumeName: media-ssd
+    claimName: media-ssd
+```
+
+it was able to populate within the PV as expected under `/mnt/ssd/media/<plex-directory-here>`.
